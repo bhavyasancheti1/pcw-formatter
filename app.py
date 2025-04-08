@@ -1,6 +1,7 @@
 # app.py
 
 
+
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 import shutil
@@ -14,6 +15,9 @@ async def generate_pcw(
     gpt_output: UploadFile = File(...),
     pcw_template: UploadFile = File(...)
 ):
+    print("✅ /generate-pcw/ endpoint was hit")
+    print(f"📂 Received files: {gpt_output.filename}, {pcw_template.filename}")
+
     # Validate file types
     if not gpt_output.filename.endswith(('.xlsx', '.xls')) or not pcw_template.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=422, detail="Both files must be Excel (.xlsx or .xls)")
@@ -40,3 +44,4 @@ async def generate_pcw(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating PCW: {str(e)}")
+
