@@ -1,0 +1,56 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+      "title": "PCW Formatter",
+      "version": "1.0.0"
+    },
+    "servers": [
+      {
+        "url": "https://pcw-formatter-2.onrender.com"
+      }
+    ],
+    "paths": {
+      "/format-pcw-json/": {
+        "post": {
+          "operationId": "formatPCWFromJson",
+          "summary": "Generate formatted PCW file from GPT JSON and template URL",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "gpt_data": {
+                      "type": "object",
+                      "description": "GPT-generated parts and labor structure with snake_case keys"
+                    },
+                    "pcw_template_url": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Public Google Drive or Dropbox link to the PCW template file"
+                    }
+                  },
+                  "required": ["gpt_data", "pcw_template_url"]
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Returns the filled PCW Excel file",
+              "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                  "schema": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
