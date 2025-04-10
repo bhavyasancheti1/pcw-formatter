@@ -6,12 +6,13 @@ from googleapiclient.http import MediaFileUpload
 FOLDER_ID = "1cTlWq4kOPq8PbybqKZi17f6QYz0xAoZ1"
 
 # Path to your service account credentials
-SERVICE_ACCOUNT_FILE = "creds/gdrive-creds.json"
+SERVICE_ACCOUNT_FILE = "/etc/secrets/gdrive-creds.json"
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 # Set up the API client
 credentials = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    SERVICE_ACCOUNT_FILE,
+    scopes=SCOPES
 )
 drive_service = build('drive', 'v3', credentials=credentials)
 
