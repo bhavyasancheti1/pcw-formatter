@@ -1,7 +1,7 @@
 # app.py
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 import shutil
 import os
 import tempfile
@@ -9,11 +9,12 @@ import requests
 
 from format_pcw import fill_template
 from format_pcw_json import fill_template_from_json
+from gdrive_uploader import upload_file_to_gdrive  # 👈 NEW
 
 app = FastAPI()
 
-# === Existing Endpoint: File Upload ===
-@app.post("/generate-pcw/", summary="Generate a filled PCW Excel file from uploaded GPT output and template")
+# === Updated Endpoint: File Upload + Google Drive Upload ===
+@app.post("/generate-pcw/", summary="Generate a filled PCW Excel file and upload to Drive")
 async def generate_pcw(
     gpt_output: UploadFile = File(...),
     pcw_template: UploadFile = File(...)
@@ -29,40 +30,24 @@ async def generate_pcw(
     output_path = "/tmp/Final_PCW_Filled.xlsx"
 
     try:
+        # Save the uploaded files
         with open(gpt_output_path, 'wb') as f:
             shutil.copyfileobj(gpt_output.file, f)
         with open(pcw_template_path, 'wb') as f:
             shutil.copyfileobj(pcw_template.file, f)
 
+        # Call your formatting function
         fill_template(gpt_output_path, pcw_template_path, output_path)
 
-        return FileResponse(output_path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename="Final_PCW_Filled.xlsx")
+        # Upload to Google Drive
+        view_url, download_url = upload_file_to_gdrive(output_path, "Final_PCW_Filled.xlsx")
+
+        # Return the Drive links instead of a file response
+        return {
+            "message": "✅ PCW file uploaded to Google Drive.",
+            "view_link": view_url,
+            "download_link": download_url
+        }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating PCW: {str(e)}")
-
-# === New Endpoint: JSON Input for GPT Integration ===
-@app.post("/format-pcw-json/")
-async def format_pcw_json(request: Request):
-    try:
-        body = await request.json()
-        gpt_data = body.get("gpt_data")
-        pcw_template_url = body.get("pcw_template_url")
-
-        if not gpt_data or not pcw_template_url:
-            raise HTTPException(status_code=400, detail="Missing gpt_data or pcw_template_url")
-
-        template_response = requests.get(pcw_template_url)
-        if template_response.status_code != 200:
-            raise HTTPException(status_code=400, detail="Failed to fetch PCW template file")
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_template:
-            temp_template.write(template_response.content)
-            temp_template_path = temp_template.name
-
-        output_path = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx").name
-
-        fill_template_from_json(gpt_data, temp_template_path, output_path)
-
-        return FileResponse(output_path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename="Final_PCW_Generated.xlsx")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
