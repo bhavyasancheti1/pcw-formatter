@@ -1,5 +1,6 @@
 # app.py
-
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
 import shutil
@@ -13,6 +14,13 @@ from format_pcw_json import fill_template_from_json
 from gdrive_uploader import upload_file_to_gdrive  # 👈 Google Drive integration
 
 app = FastAPI()
+
+# Serve static/index.html as the home page
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/static/index.html")
 
 
 @app.post("/generate-pcw/", summary="Generate a filled PCW Excel file and upload to Drive")
