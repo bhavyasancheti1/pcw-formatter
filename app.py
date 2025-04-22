@@ -1,6 +1,6 @@
 # app.py
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse  # Added FileResponse here
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
 import shutil
@@ -49,13 +49,13 @@ async def generate_pcw(
         fill_template(gpt_output_path, pcw_template_path, output_path)
 
         # Upload to Google Drive
-        view_url, download_url = upload_file_to_gdrive(output_path, "Final_PCW_Filled.xlsx")
+        view_url, _ = upload_file_to_gdrive(output_path, "Final_PCW_Filled.xlsx")
 
-        # Wait for the Google Drive file to become accessible
+        # Wait for the Google Drive file to become accessible (optional)
         print("⏳ Waiting for file to be ready on Drive...")
         for attempt in range(5):
             try:
-                response = requests.head(download_url)
+                response = requests.head(view_url)
                 if response.status_code == 200:
                     print("✅ Drive file is now accessible.")
                     break
@@ -63,12 +63,25 @@ async def generate_pcw(
                 print(f"Attempt {attempt + 1} failed: {e}")
             time.sleep(1.5)
 
-        # Return links
+        # Return links: Google Drive view + local download endpoint
         return {
             "message": "✅ PCW file uploaded to Google Drive.",
             "view_link": view_url,
-            "download_link": download_url
+            "download_link": "/download-pcw/"
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating PCW: {str(e)}")
+
+
+# 🔽 New endpoint to serve local PCW download
+@app.get("/download-pcw/")
+def download_pcw():
+    path = "/tmp/Final_PCW_Filled.xlsx"
+    if os.path.exists(path):
+        return FileResponse(
+            path,
+            filename="Final_PCW_Filled.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    raise HTTPException(status_code=404, detail="Formatted PCW file not found")
