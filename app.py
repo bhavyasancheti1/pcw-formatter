@@ -1,29 +1,43 @@
 # app.py
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse, FileResponse  # Added FileResponse here
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import shutil
 import os
-import tempfile
-import requests
-import time
 
 from format_pcw import fill_template
-from format_pcw_json import fill_template_from_json
-from gdrive_uploader import upload_file_to_gdrive  # 👈 Google Drive integration
+# from format_pcw_json import fill_template_from_json  # keep if you use it elsewhere
 
 app = FastAPI()
 
-# Serve static/index.html as the home page
+# --- CORS (allow your local Vite dev server + your Render domain) ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://pcw-formatter-2.onrender.com",
+        # add your deployed frontend domain here when you have one
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve static/index.html as the home page (optional)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", include_in_schema=False)
 def root():
     return RedirectResponse(url="/static/index.html")
 
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
 
-@app.post("/generate-pcw/", summary="Generate a filled PCW Excel file and upload to Drive")
+# ---- Generate PCW and return the file directly (no Google Drive) ----
+@app.post("/generate-pcw/", summary="Generate a filled PCW Excel file and return as download")
 async def generate_pcw(
     gpt_output: UploadFile = File(...),
     pcw_template: UploadFile = File(...)
@@ -48,40 +62,18 @@ async def generate_pcw(
         # Format the PCW file using your logic
         fill_template(gpt_output_path, pcw_template_path, output_path)
 
-        # Upload to Google Drive
-        view_url, _ = upload_file_to_gdrive(output_path, "Final_PCW_Filled.xlsx")
+        if not os.path.exists(output_path):
+            raise HTTPException(status_code=500, detail="Output file was not created")
 
-        # Wait for the Google Drive file to become accessible (optional)
-        print("⏳ Waiting for file to be ready on Drive...")
-        for attempt in range(5):
-            try:
-                response = requests.head(view_url)
-                if response.status_code == 200:
-                    print("✅ Drive file is now accessible.")
-                    break
-            except Exception as e:
-                print(f"Attempt {attempt + 1} failed: {e}")
-            time.sleep(1.5)
-
-        # Return links: Google Drive view + local download endpoint
-        return {
-            "message": "✅ PCW file uploaded to Google Drive.",
-            "view_link": view_url,
-            "download_link": "/download-pcw/"
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating PCW: {str(e)}")
-
-
-# 🔽 New endpoint to serve local PCW download
-@app.get("/download-pcw/")
-def download_pcw():
-    path = "/tmp/Final_PCW_Filled.xlsx"
-    if os.path.exists(path):
+        # Return the file directly so the browser downloads it
         return FileResponse(
-            path,
+            output_path,
             filename="Final_PCW_Filled.xlsx",
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-    raise HTTPException(status_code=404, detail="Formatted PCW file not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating PCW: {str(e)}")
+
